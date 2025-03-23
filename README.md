@@ -229,6 +229,158 @@ GET /companies/_search
 ### Delete
 
 ## Aggregation
+Aggregation cung cấp khả năng thực hiện các phép tính và thống kê (như tổng hay trung bình) trên dữ liệu hiện có. Elasticsearch hỗ trợ 3 kiểu aggregation khác nhau
+### Metric Aggregation
+Metric aggregation bao gồm việc tính toán chỉ số thống kê (như tổng, trung bình, min, max) từ một trường số trong dữ liệu, cung cấp tóm tắt và tổng quan ban đầu về dữ liệu.
+
+VD: Lấy thống kê về **market cap** của index.
+```elasticsearch
+GET my_index/_search
+{
+  "size": 0,
+  "aggs": {
+    "statistic_of_market_cap": {
+      "stats": {
+        "field": "Market Cap"
+      }
+    }
+  }
+}
+```
+
+Kết quả aggregation trả về là tổng hợp 5 chỉ số thống kê cơ bản nhất của dữ liệu.
+```elasticsearch
+{
+  "took": 22,
+  "timed_out": false,
+  "_shards": {
+    "total": 1,
+    "successful": 1,
+    "skipped": 0,
+    "failed": 0
+  },
+  "hits": {
+    "total": {
+      "value": 505,
+      "relation": "eq"
+    },
+    "max_score": null,
+    "hits": []
+  },
+  "aggregations": {
+    "statistic_of_market_cap": {
+      "count": 505,
+      "min": 2626102016,
+      "max": 809508012032,
+      "avg": 49239436698.10693,
+      "sum": 24865915532544
+    }
+  }
+}
+```
+
+### Bucket Aggregation
+Bucket aggregations không tính toán các số liệu từ các field như Metric aggregations mà tạo ra các bucket của các document. Mỗi bucket tương ứng với một tiêu chí mà dựa vào đó để xác định xem 1 document có thuộc bucket đó không.
+
+#### Term Aggregation
+Nhóm các bản ghi theo các giá trị phân biệt của 1 trường.
+
+```elasticsearch
+GET my_index/_search
+{
+  "size": 0,
+  "aggs": {
+    "sector_bucket": {
+      "terms": {
+        "field": "Sector.keyword"
+      }
+    }
+  }
+}
+```
+
+#### Range Aggregation
+Nhóm các bản ghi theo khoảng của 1 trường.
+
+```elasticsearch
+GET my_index/_search
+{
+  "size": 0, 
+  "aggs": {
+    "Price-sale-bucket": {
+      "range": {
+        "field": "Price/Sales",
+        "ranges": [
+          {
+            "to": 5
+          },
+          {
+            "from": 5,
+            "to": 20
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+#### Subaggregation
+Kết hợp giữa bucket aggregation và metric aggregation
+
+```elasticsearch
+GET my_index/_search
+{
+  "size": 0, 
+  "aggs": {
+    "industrial_only": {
+      "filter": {
+        "term": {
+          "Sector.keyword": "Industrials"
+        }
+      },
+      "aggs": {
+        "average price earnings": {
+          "avg": {
+            "field": "Price/Earnings"
+          }
+        }
+      }
+    }
+  }
+}
+```
+### Pipeline Aggregation
+Pipeline aggregation xử lý output của các aggregation khác thay vì xử lý trực tiếp trên dữ liệu. Pipeline aggregation giúp thực hiện các phép tính như trung bình động, tổng tích lũy và phần trăm trên kết quả tổng hợp.
+
+Ví dụ: Tìm giá trị lớn nhất của trung bình price_earning lọc theo các sector.
+
+```elasticsearch
+GET my_index/_search
+{
+  "size": 0,
+  "aggs": {
+    "sector_buckets": {
+      "terms": {
+        "field": "Sector.keyword"
+      },
+      "aggs": {
+        "average_price_earnings": {
+          "avg": {
+            "field": "Price/Earnings"
+          }
+        }
+      }
+    },
+    "max_avg_price": {
+      "max_bucket": {
+        "buckets_path": "sector_buckets > average_price_earnings"
+      }
+    }
+  }
+}
+```
+
 ## Index/ Search Algorithm
 ### Inverted Index
 Inverted index là một danh sách có thứ tự của toàn bộ các từ phân biệt xuất hiện trong bất kỳ 1 document nào của index. Inverted index được tạo ra bởi Analyzer gồm 3 bước:
